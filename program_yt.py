@@ -5,8 +5,8 @@ import yt_dlp                                   # Descargar videos yt
 import pywhatkit as kit                         # Utilidad / búsqueda
 import os                                       # Llamadas al sistema
 
-from youtubesearchpython import VideosSearch                # Buscar videos por python
-from moviepy.editor import VideoFileClip, AudioFileClip     # Editar videos y audio
+from youtubesearchpython import VideosSearch                   # Buscar videos por python
+from moviepy.editor import VideoFileClip, AudioFileClip        # Editar videos y audio
 
 # ================================================================================== #
 # -------------------------------------------------------------------------------- #
@@ -14,17 +14,21 @@ from moviepy.editor import VideoFileClip, AudioFileClip     # Editar videos y au
 running = True
 # ================================================================================== #
 # -------------------------------------------------------------------------------- #
-# Une un video y un audio de una ruta especificada
+# Une un video y un audio de una ruta especificada con ajustes de compresión
 def unir_video_audio(video_path, audio_path, output_path):
     try:
-        # Cargar el archivo de video
+        # Cargar el archivo de video y audio
         video_clip = VideoFileClip(video_path)
-        
-        # Cargar el archivo de audio
         audio_clip = AudioFileClip(audio_path)
         
-        # Unir el audio al video y guardar con los codecs específicos y threads
-        video_clip.set_audio(audio_clip).write_videofile(output_path, codec='libx264', audio_codec='aac', threads=15, preset='ultrafast')
+        # Ajustar la duración del audio al del video
+        audio_clip = audio_clip.set_duration(video_clip.duration)
+        
+        # Unir el audio al video y escribir el archivo resultante
+        final_clip = video_clip.set_audio(audio_clip)
+        
+        # Ajustar el bitrate y la calidad de codificación
+        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', threads=16, preset='faster', bitrate='3000k')
         
         print("Fusión de video y audio completada exitosamente.")
     except Exception as e:
