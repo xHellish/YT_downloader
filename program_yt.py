@@ -5,8 +5,9 @@ import yt_dlp                                   # Descargar videos yt
 import pywhatkit as kit                         # Utilidad / búsqueda
 import os                                       # Llamadas al sistema
 import wikipedia                                # Obtener info
+import requests                                 # Descargar
 
-from googletrans import Translator                              # Traductor
+from bs4 import BeautifulSoup                                   # Obtener link de páginas web
 from youtubesearchpython import VideosSearch                    # Buscar videos por python
 from moviepy.editor import VideoFileClip, AudioFileClip         # Editar videos y audio
 
@@ -131,7 +132,8 @@ def opcion1_descargar_video_yt():
     descargar_video_youtube(link)
 
 # ================================================================================== #
-def buscar_videos_youtube(query, max_results):
+def buscar_videos_youtube(query, max_results=5):
+
     # Realizar la búsqueda en YouTube desde la consola
     videos_search = VideosSearch(query, limit=max_results)
     resultados = videos_search.result()['result']
@@ -162,7 +164,12 @@ def opcion2_buscar_videos_yt():
     # Búsqueda en YouTube
     query = input("Buscar: ")
     print("")
-    buscar_videos_youtube(query, max_results=5)
+
+    try:
+
+        buscar_videos_youtube(query, max_results=5)
+    except Exception as e:
+        print(f"Error en opción 2: {e}")
 
 # ================================================================================== #
 # Opción 3
@@ -192,7 +199,61 @@ def opcion4_buscar_info_wikipedia():
     print(obtener_wiki_info_es(query))
     print("")
 
-# ================================================================================== #  
+# ================================================================================== #
+def descargar_pdf(url, output_folder='./'):
+    response = requests.get(url)
+    if response.status_code == 200:
+        file_name = url.split('/')[-1]
+        file_path = os.path.join(output_folder, file_name)
+        with open(file_path, 'wb') as file:
+            file.write(response.content)
+        print(f"PDF descargado exitosamente: {file_path}")
+    else:
+        print(f"Error al descargar el PDF: {response.status_code}")
+# -------------------------------------------------------------------------------- #        
+def buscar_pdfs_duckduckgo(query, max_results=5):
+    search_url = f"https://duckduckgo.com/html/?q={query.replace(' ', '+')}+filetype:pdf"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    response = requests.get(search_url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Extraer los enlaces de los resultados de búsqueda
+    links = []
+    for item in soup.find_all('a', class_='result__a'):
+        href = item.get('href')
+        if href and '.pdf' in href:
+            links.append(href)
+            if len(links) >= max_results:
+                break
+
+    return links
+# -------------------------------------------------------------------------------- #
+# Opción 5
+def opcion5_buscar_y_descargar_pdf():
+    query = input("Buscar PDF: ")
+    print("")
+
+    try:
+        enlaces_pdf = buscar_pdfs_duckduckgo(query, max_results=5)
+        for idx, link in enumerate(enlaces_pdf):
+            print(f"{idx + 1}. {link} \n")
+
+        opcion = int(input("Digite número de PDF a descargar (0 para cancelar): "))
+        print("")
+
+        if opcion in range(1, len(enlaces_pdf) + 1):
+            descargar_pdf(enlaces_pdf[opcion - 1])
+        elif opcion == 0:
+            return
+        else:
+            print("Opción incorrecta")
+    except Exception as e:
+        print(f"Error en opción 5: {e}")
+
+# ================================================================================== # 
 # Running
 while running:
     print("-----============== < MENU > ==============-----")
@@ -200,13 +261,14 @@ while running:
     print("2. Buscar video en YT")
     print("3. Buscar video en YT (abrir navegador)")
     print("4. Info - wikipedia")
+    print("5. Buscar PDF")
     print("0. Salir")
     # ------------------------------------------------------------- #
     
     try:
         opcion = int(input("Opción: "))
 
-        if opcion in [0, 1, 2, 3, 4]:
+        if opcion in [0, 1, 2, 3, 4, 5]:
             if opcion == 0:
                 print("Saliendo...")
                 running = False
@@ -222,6 +284,9 @@ while running:
 
             if opcion == 4:
                 opcion4_buscar_info_wikipedia()
+
+            if opcion == 5:
+                opcion5_buscar_y_descargar_pdf()
 
         else:
             print("Opción Incorrecta")
