@@ -7,7 +7,10 @@ import os                                       # Llamadas al sistema
 import wikipedia                                # Obtener info
 import requests                                 # Descargar
 import wx                                       # Interfaz gráfica
+#import vlc                                      # Mostrar videos
 
+from io import BytesIO                                          # Conversor de formato
+from PIL import Image                                           # Miniaturas yt
 from bs4 import BeautifulSoup                                   # Obtener link de páginas web
 from youtubesearchpython import VideosSearch                    # Buscar videos por python
 from moviepy.editor import VideoFileClip, AudioFileClip         # Editar videos y audio
@@ -58,7 +61,7 @@ def unir_video_audio(video_path, audio_path, output_path):
 # Función que recibe un link de video en YouTube y descarga el video en elo directorio actual
 def descargar_video_youtube(link):
     # Opcion para descargar por separado y unir después
-    confirm = input("¿Desea máxima calidad de video (puede durar varios minutos)? (y/n): ")
+    confirm = "n"
 
     if confirm == "y":
         # Configuración para descargar video y audio por separado
@@ -109,22 +112,21 @@ def descargar_video_youtube(link):
 
         return  
     else:
+        # Configuración para descargar el mejor formato disponible
         ydl_opts = {
             'format': 'best',
             'outtmpl': '%(title)s.%(ext)s',
+            'noplaylist': True,  
+            'merge_output_format': None  
         }
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(link, download=True)
+            print("Descarga completa.")
+        except Exception as e:
+            print(f"Error al descargar el video: {e}")
 
-    # -------------------------------------------------------------------------------- #
-    # En caso de no descargar por separado
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([link])
-        print("Video descargado con éxito.")
-    except Exception as e:
-        print(f"Error al descargar el video: {e}")
-
-    print("")
-    return
 # -------------------------------------------------------------------------------- #
 # Opción 1
 def opcion1_descargar_video_yt():
@@ -144,7 +146,7 @@ def buscar_videos_youtube(query, max_results=5):
     # Extraer y mostrar la información relevante de los resultados (link, nombre)
     for idx, video in enumerate(resultados):
 
-        video = [video['link'], video['title']]
+        video = [video['link'], video['title'], video["thumbnails"][0]["url"]]
 
         # print(f"{idx + 1}. {video['title']}")
         # print(f"   Descripción: {video['descriptionSnippet']}")
@@ -153,19 +155,6 @@ def buscar_videos_youtube(query, max_results=5):
         links_strings.append(video)
 
     return links_strings
-
-# -------------------------------------------------------------------------------- #
-# Opción 2
-def opcion2_buscar_videos_yt():
-    # Búsqueda en YouTube
-    query = input("Buscar: ")
-    print("")
-
-    try:
-
-        buscar_videos_youtube(query, max_results=5)
-    except Exception as e:
-        print(f"Error en opción 2: {e}")
 
 # ================================================================================== #
 # Opción 3
@@ -183,15 +172,6 @@ def obtener_wiki_info_es(query):
 
     except wikipedia.exceptions.WikipediaException as e:
         return f"No se encontró información para '{query}' en Wikipedia."
-
-# -------------------------------------------------------------------------------- #
-# Opción 4
-def opcion4_buscar_info_wikipedia():
-    # Obtener información de Wikipedia
-    query = input("Buscar: ")
-    print("")
-    print(obtener_wiki_info_es(query))
-    print("")
 
 # ================================================================================== #
 def descargar_pdf(url, output_folder='./'):
@@ -248,36 +228,117 @@ def opcion5_buscar_y_descargar_pdf():
         print(f"Error en opción 5: {e}")
 
 # ================================================================================== # 
-# Crear una clase para la aplicación
+# Crear gráfico de la aplicación
 # -------------------------------------------------------------------------------- #
+global panel_secundario
+
+# Reproducir video
+def play_video(panel, url):
+    # Crear una instancia de VLC
+    instance = vlc.Instance()
+    player = instance.media_player_new()
+
+    # Establecer la ventana del reproductor VLC en el panel
+    player.set_xwindow(panel.GetWindowID())  # Usa set_hwnd en Windows
+    
+    # Configurar el video
+    media = instance.media_new(url)
+    player.set_media(media)
+    player.play()
+
+def on_paint(event):
+    # Redibujar el panel para asegurarse de que se actualiza correctamente
+    dc = wx.PaintDC(panel_secundario)
+    panel_secundario.Refresh()
+    event.Skip()
+
+# -------------------------------------------------------------------------------- #
+# Obtener imagen de la miniatura con la url
+def obtener_miniatura(url): 
+    response = requests.get(url)
+    image = Image.open(BytesIO(response.content))
+    return image
+
+# Convertir imagen a un formato que wx admita
+def pil_image_to_wx_bitmap(pil_image):
+    with BytesIO() as bio:
+        pil_image.save(bio, format="PNG")
+        bio.seek(0)
+        wx_image = wx.Image(bio)
+        if not wx_image.IsOk():
+            raise ValueError("No se pudo convertir la imagen a wx.Image")
+        bitmap = wx_image.ConvertToBitmap()
+    return bitmap
+
+def redimensionar_imagen(pil_image, size=(150, 90)):
+    return pil_image.resize(size, Image.LANCZOS)
 
 def on_button_buscar_click(event):
     texto_busqueda_usuario = text_box_buscar.GetValue()
     opcion_actual = combo_box_opciones.GetValue()
 
-    print(texto_busqueda_usuario)
-    print("")
-    print(opcion_actual)
+    # Eliminar todos los widgets del panel secundario
+    for child in panel_secundario.GetChildren():
+        child.Destroy()
+    panel_secundario.Layout()
 
     if opcion_actual == "YouTube":
         lista_links_videos = buscar_videos_youtube(texto_busqueda_usuario, max_results=5)
 
-
-        coordenada_y_videos = 100
+        coordenada_y_videos = 20
         for video in lista_links_videos:
-            label = wx.StaticText(panel_principal, label=f"{video[1]} | link: {video[0]}", pos=(20, coordenada_y_videos))
+            link, titulo, miniatura_url = video
+            miniatura_image = obtener_miniatura(miniatura_url)
+            miniatura_image = redimensionar_imagen(miniatura_image)
+            
+            # Convertir la imagen de PIL a wx.Bitmap
+            miniatura_bitmap = pil_image_to_wx_bitmap(miniatura_image)
+
+            # Crear StaticBitmap para la miniatura
+            miniatura_bitmap_ctrl = wx.StaticBitmap(panel_secundario, bitmap=miniatura_bitmap, pos=(20, coordenada_y_videos))
+
+            # -------------------------------------------------------------------------------- #
+            # Crear StaticText para el título
+            label_title = wx.StaticText(panel_secundario, label=f"{titulo}", pos=(180, coordenada_y_videos))
+            label_link = wx.StaticText(panel_secundario, label=f"{link}", pos=(180, coordenada_y_videos+20))
+
+            # Cambiar el tamaño del texto del StaticText
+            font_label_title = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+            label_title.SetFont(font_label_title)
+
+            font_label_link = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            label_link.SetFont(font_label_link)
+            # -------------------------------------------------------------------------------- #
+
+            descargar_video_button = wx.Button(panel_secundario, label="Descargar", pos=(180, coordenada_y_videos+40), size=(150, 30))
+            descargar_video_button.Bind(wx.EVT_BUTTON, lambda event: descargar_video_youtube(link))
+
+            ver_video_button = wx.Button(panel_secundario, label="Ver", pos=(335, coordenada_y_videos+40), size=(150, 30))
+            ver_video_button.Bind(wx.EVT_BUTTON, lambda event: play_video(panel_secundario, link))
+
+            # -------------------------------------------------------------------------------- #
             coordenada_y_videos = coordenada_y_videos + 100
+
+        panel_principal.Layout()
 
 # Crear la aplicación
 app = wx.App(False)
 frame1 = wx.Frame(None, title="Stuff Downloader", size=(1280, 720))
-
+# -------------------------------------------------------------------------------- #
+# Paneles
 # Crear un panel para contener los widgets
 panel_principal = wx.Panel(frame1)
 
+# Crear un panel secundario
+panel_secundario = wx.Panel(panel_principal, pos=(20, 60), size=(1230, 600))
+panel_secundario.SetBackgroundColour(wx.Colour(200, 200, 200))  # Color de fondo gris
+
+# Enlazar el evento de pintura del panel para actualizar la interfaz
+panel_secundario.Bind(wx.EVT_PAINT, on_paint)
+
 # -------------------------------------------------------------------------------- #
 # Botones
-buscar_button = wx.Button(panel_principal, label="Iniciar búsqueda", pos=(430, 20), size=(150, 30))
+buscar_button = wx.Button(panel_principal, label="Iniciar búsqueda", pos=(540, 20), size=(150, 30))
 buscar_button.Bind(wx.EVT_BUTTON, on_button_buscar_click)
 
 # -------------------------------------------------------------------------------- #
@@ -285,12 +346,12 @@ buscar_button.Bind(wx.EVT_BUTTON, on_button_buscar_click)
 combo_box_opciones = wx.ComboBox(panel_principal, choices=['YouTube', 'PDF', 'Wikipedia'], style=wx.CB_READONLY)
 
 # Enlazar el evento de selección del ComboBox a la función correspondiente
-combo_box_opciones.SetPosition((590, 21))
+combo_box_opciones.SetPosition((430, 21))
 combo_box_opciones.SetSize((100, 28))
 
 # -------------------------------------------------------------------------------- #
 # Crear un Label
-label_formato_combobox = wx.StaticText(panel_principal, label="Formato", pos=(595, 23))
+label_formato_combobox = wx.StaticText(panel_principal, label="Formato", pos=(435, 23))
 label_formato_combobox.SetBackgroundColour(wx.Colour(255, 255, 0))  # Amarillo
 # -------------------------------------------------------------------------------- #
 # Text input del usuario
@@ -316,36 +377,7 @@ while running:
     print("5. Buscar PDF")
     print("0. Salir")
     # ------------------------------------------------------------- #
-    
-    try:
-        opcion = int(input("Opción: "))
-
-        if opcion in [0, 1, 2, 3, 4, 5]:
-            if opcion == 0:
-                print("Saliendo...")
-                running = False
-
-            if opcion == 1:
-                opcion1_descargar_video_yt()
-
-            if opcion == 2:
-                opcion2_buscar_videos_yt()
-                
-            if opcion == 3:
-                opcion3_buscar_video_yt()
-
-            if opcion == 4:
-                opcion4_buscar_info_wikipedia()
-
-            if opcion == 5:
-                opcion5_buscar_y_descargar_pdf()
-
-        else:
-            print("Opción Incorrecta")
-
-    except:
-        print("Error innesperado, intenta nuevamente...")
-    # ------------------------------------------------------------- #
+    break
 
 # ================================================================================== #
 # End of code
