@@ -6,6 +6,7 @@ import pywhatkit as kit                         # Utilidad / búsqueda
 import os                                       # Llamadas al sistema
 import wikipedia                                # Obtener info
 import requests                                 # Descargar
+import wx                                       # Interfaz gráfica
 
 from bs4 import BeautifulSoup                                   # Obtener link de páginas web
 from youtubesearchpython import VideosSearch                    # Buscar videos por python
@@ -140,23 +141,18 @@ def buscar_videos_youtube(query, max_results=5):
 
     links_strings = []
 
-    # Extraer y mostrar la información relevante de los resultados
+    # Extraer y mostrar la información relevante de los resultados (link, nombre)
     for idx, video in enumerate(resultados):
-        print(f"{idx + 1}. {video['title']}")
+
+        video = [video['link'], video['title']]
+
+        # print(f"{idx + 1}. {video['title']}")
         # print(f"   Descripción: {video['descriptionSnippet']}")
-        print(f"   Link: {video['link']}\n")
+        # print(f"   Link: {video['link']}\n")
 
-        links_strings.append(video['link'])
+        links_strings.append(video)
 
-    opcion = int(input("Digite número de video a descargar (0 para cancelar): "))
-    print("")
-
-    if opcion in [0, 1, 2, 3, 4, 5]:
-        if opcion == 0:
-            return
-        else:
-            descargar_video_youtube(links_strings[opcion-1])
-            return
+    return links_strings
 
 # -------------------------------------------------------------------------------- #
 # Opción 2
@@ -173,10 +169,8 @@ def opcion2_buscar_videos_yt():
 
 # ================================================================================== #
 # Opción 3
-def opcion3_buscar_video_yt():
+def opcion3_buscar_video_yt(query):
     # Búsqueda en YouTube para abrir navegador
-    query = input("Buscar: ")
-    print("")
     kit.playonyt(query)
 
 # ================================================================================== #
@@ -254,6 +248,64 @@ def opcion5_buscar_y_descargar_pdf():
         print(f"Error en opción 5: {e}")
 
 # ================================================================================== # 
+# Crear una clase para la aplicación
+# -------------------------------------------------------------------------------- #
+
+def on_button_buscar_click(event):
+    texto_busqueda_usuario = text_box_buscar.GetValue()
+    opcion_actual = combo_box_opciones.GetValue()
+
+    print(texto_busqueda_usuario)
+    print("")
+    print(opcion_actual)
+
+    if opcion_actual == "YouTube":
+        lista_links_videos = buscar_videos_youtube(texto_busqueda_usuario, max_results=5)
+
+
+        coordenada_y_videos = 100
+        for video in lista_links_videos:
+            label = wx.StaticText(panel_principal, label=f"{video[1]} | link: {video[0]}", pos=(20, coordenada_y_videos))
+            coordenada_y_videos = coordenada_y_videos + 100
+
+# Crear la aplicación
+app = wx.App(False)
+frame1 = wx.Frame(None, title="Stuff Downloader", size=(1280, 720))
+
+# Crear un panel para contener los widgets
+panel_principal = wx.Panel(frame1)
+
+# -------------------------------------------------------------------------------- #
+# Botones
+buscar_button = wx.Button(panel_principal, label="Iniciar búsqueda", pos=(430, 20), size=(150, 30))
+buscar_button.Bind(wx.EVT_BUTTON, on_button_buscar_click)
+
+# -------------------------------------------------------------------------------- #
+# Crear un ComboBox y agregar opciones
+combo_box_opciones = wx.ComboBox(panel_principal, choices=['YouTube', 'PDF', 'Wikipedia'], style=wx.CB_READONLY)
+
+# Enlazar el evento de selección del ComboBox a la función correspondiente
+combo_box_opciones.SetPosition((590, 21))
+combo_box_opciones.SetSize((100, 28))
+
+# -------------------------------------------------------------------------------- #
+# Crear un Label
+label_formato_combobox = wx.StaticText(panel_principal, label="Formato", pos=(595, 23))
+label_formato_combobox.SetBackgroundColour(wx.Colour(255, 255, 0))  # Amarillo
+# -------------------------------------------------------------------------------- #
+# Text input del usuario
+text_box_buscar = wx.TextCtrl(panel_principal, pos=(20, 20), size=(400, 30))
+
+font_textbox = wx.Font(16, wx.SWISS, wx.NORMAL, wx.BOLD)
+text_box_buscar.SetFont(font_textbox)
+
+# Mostrar la ventana
+frame1.Show()
+
+# Ejecutar el bucle principal de eventos
+app.MainLoop()
+
+# ================================================================================== #
 # Running
 while running:
     print("-----============== < MENU > ==============-----")
